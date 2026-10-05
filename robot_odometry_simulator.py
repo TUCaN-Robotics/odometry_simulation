@@ -9,8 +9,14 @@ step_size = 1  # cm
 wheel_diameter = 9 # cm
 wheelbase = 5  # cm
 encoder_resolution  = 1000 # pulses per revolution
-right_wheel_angular_velocity = 0
-left_wheel_angular_velocity =0
+
+# Wheel Encoder Reading Computation
+angle_step = 2*math.pi/(wheel_diameter/step_size)
+encoder_step = encoder_resolution/angle_step
+encoder_step_distance = encoder_resolution/(wheel_diameter/step_size)
+left_encoder_pulses = 0
+right_encoder_pulses = 0
+encoder_readings = [(left_encoder_pulses, right_encoder_pulses)]
 
 # Initial position and orientation of the robot
 x, y, theta = 0.0, 0.0, 0.0
@@ -21,23 +27,29 @@ square_size = random.randrange(80, 200)
 
 # Function to move the robot forward
 def move_forward(distance):
-    global x, y, theta
+    global x, y, theta, right_encoder_pulses, left_encoder_pulses
     steps = int(distance / step_size)
     for _ in range(steps):
         dx = step_size * math.cos(theta)
         dy = step_size * math.sin(theta)
         x += dx
         y += dy
+        left_encoder_pulses += encoder_step
+        right_encoder_pulses += encoder_step
         poses.append((x, y, theta))
+        encoder_readings.append((left_encoder_pulses, right_encoder_pulses))
 
 # Function to turn the robot 90 degrees to the left
 def turn_left(angle_rad):
-    global theta
+    global theta, right_encoder_pulses, left_encoder_pulses
     steps = int(abs(angle_rad) / math.radians(5))  # 5° per step
     dtheta = angle_rad / steps
     for _ in range(steps):
         theta += dtheta
+        left_encoder_pulses -=  encoder_step_distance*(dtheta*wheelbase/2)
+        right_encoder_pulses += encoder_step_distance*(dtheta*wheelbase/2)
         poses.append((x, y, theta))  # Turning in place, position stays the same
+        encoder_readings.append((left_encoder_pulses, right_encoder_pulses))
 
 # Drive the robot in a square path
 for _ in range(4):
@@ -66,11 +78,13 @@ def update(frame):
     if frame == 0:
         # At the first frame, just plot the initial position
         x_data, y_data, theta_data  = [poses[0][0]], [poses[0][1]], [poses[0][2]]
+        left_encoder_data, right_encoder_data = [encoder_readings[0][0]], [encoder_readings[0][1]]
     else:
         x_data, y_data, theta_data = zip(*poses[:frame+1])  # Plot all positions up to the current frame
+        left_encoder_data, right_encoder_data = zip(*encoder_readings[:frame+1])
     line.set_data(x_data, y_data)
     dot.set_data([x_data[-1]], [y_data[-1]])  # Make sure these are sequences
-    print (f"\r {x_data[-1]:3.2f}  {y_data[-1]:3.2f}  {math.degrees(theta_data[-1]):3.2f}", end='')
+    print (f"\r{left_encoder_data[-1]:3.0f} {right_encoder_data[-1]:3.0f} {x_data[-1]:3.1f} {y_data[-1]:3.1f} {math.degrees(theta_data[-1]):3.2f} {x_data[-1] - 0:3.1f} {y_data[-1] - 0:3.1f} {math.degrees(theta_data[-1] - 0):3.2f}", end='')
     return line, dot
 
 # Set up the animation
